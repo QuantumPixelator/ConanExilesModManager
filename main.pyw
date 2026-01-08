@@ -1,6 +1,5 @@
 # This is a Python 3 script for a mod manager application for Conan Exiles.
-# It uses PySide6 for the GUI and SQLite for local data storage.
-# It was developed with the help of DeepSeek AI.
+# Developed with the help of AI.
 
 import os
 import sys
