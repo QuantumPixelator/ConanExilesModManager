@@ -4,6 +4,7 @@ A simple, friendly desktop app to browse Conan Exiles Steam Workshop mods, save 
 
 ## Getting started
 
+- Developed in Python 3.14.0
 - Create a virtual environment for your workspace.
 - Install dependencies:
 
