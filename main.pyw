@@ -438,16 +438,15 @@ class SteamAPI:
 # ==================== LOAD ORDER ENGINE ====================
 
 class LoadOrderCategory(Enum):
-    FRAMEWORK = 100
-    ADMIN_TOOLS = 90
-    CORE_OVERRIDES = 80
-    GAMEPLAY = 70
-    BUILDING = 60
-    ITEMS = 50
-    CHARACTERS = 40
-    UI = 30
-    LIBRARY = 20
-    DECORATION = 10
+    ADMIN = 1000
+    MAPS = 900
+    COSMETIC = 800
+    ITEMS = 700
+    THRALLS = 600
+    BUILDING = 500
+    OVERHAUL = 400
+    UTILITY = 300
+    LBPR_LAST = 100
 
 class ModRule:
     def __init__(self, mod_id, rule_type, target_mod_id=None, priority=None, notes=""):
@@ -460,29 +459,53 @@ class ModRule:
 class LoadOrderEngine:
     """Engine for creating optimized load orders based on mod rules and categories"""
    
-    # Known framework and library mods (partial list)
-    FRAMEWORK_MODS = {
-        '880454836': 'Pippi',  # Pippi - User & Server Management
-        '1625650704': 'ModControlPanel',
+    # Specifically mentioned mods with their preferred priorities
+    SPECIFIC_MOD_RULES = {
+        # Administrative & Management
+        '880454836': {'name': 'Pippi', 'category': LoadOrderCategory.ADMIN, 'priority': 10000},
+        '1625650704': {'name': 'ModControlPanel', 'category': LoadOrderCategory.ADMIN, 'priority': 9900},
+        
+        # Custom Map Mods
+        '2365946321': {'name': 'Savage Wilds', 'category': LoadOrderCategory.MAPS, 'priority': 9000},
+        
+        # Cosmetic & Appearance
+        'tot! custom': {'category': LoadOrderCategory.COSMETIC, 'priority': 8100},
+        'sudo': {'category': LoadOrderCategory.COSMETIC, 'priority': 8000},
+        
+        # Thrall & Behavioral
+        'better thralls': {'category': LoadOrderCategory.THRALLS, 'priority': 6100},
+        
+        # Building & Placeable
+        'pythagoras': {'category': LoadOrderCategory.BUILDING, 'priority': 5100},
+        
+        # Overhaul & System
+        'emberlight': {'category': LoadOrderCategory.OVERHAUL, 'priority': 4100},
+        'age of calamitous': {'category': LoadOrderCategory.OVERHAUL, 'priority': 4090},
+        'aoc': {'category': LoadOrderCategory.OVERHAUL, 'priority': 4090},
+        'eewa': {'category': LoadOrderCategory.OVERHAUL, 'priority': 4080},
+        'vam': {'category': LoadOrderCategory.OVERHAUL, 'priority': 4070},
+        
+        # Utility & QoL
+        'unlock plus': {'category': LoadOrderCategory.UTILITY, 'priority': 330},
+        '2679653448': {'name': 'LBPR - Additional Features', 'category': LoadOrderCategory.UTILITY, 'priority': 320},
+        'lbpr additional features': {'category': LoadOrderCategory.UTILITY, 'priority': 320},
+        '1369743538': {'name': 'LBPR', 'category': LoadOrderCategory.LBPR_LAST, 'priority': 100},
+        'lbpr': {'category': LoadOrderCategory.LBPR_LAST, 'priority': 100},
+        'stacksize': {'category': LoadOrderCategory.UTILITY, 'priority': 300},
+        'fashionist': {'category': LoadOrderCategory.UTILITY, 'priority': 290},
+        'iqol': {'category': LoadOrderCategory.UTILITY, 'priority': 280},
     }
    
-    LIBRARY_MODS = {
-        '2679653448': 'LBPR - Additional Features',
-        '2291760550': 'Kerozards Paragon Leveling',
-    }
-   
-    # Known mod categories based on common tags
+    # Keywords for general categorization
     CATEGORY_KEYWORDS = {
-        LoadOrderCategory.FRAMEWORK: ['pippi', 'framework', 'admin'],
-        LoadOrderCategory.ADMIN_TOOLS: ['admin', 'manager', 'control'],
-        LoadOrderCategory.CORE_OVERRIDES: ['overhaul', 'core', 'savage', 'age'],
-        LoadOrderCategory.GAMEPLAY: ['gameplay', 'survival', 'combat', 'thrall'],
-        LoadOrderCategory.BUILDING: ['building', 'construction', 'architect'],
-        LoadOrderCategory.ITEMS: ['weapon', 'armor', 'item', 'equipment'],
-        LoadOrderCategory.CHARACTERS: ['character', 'race', 'appearance'],
-        LoadOrderCategory.UI: ['ui', 'interface', 'hud', 'inventory'],
-        LoadOrderCategory.LIBRARY: ['library', 'prerequisite', 'dependency'],
-        LoadOrderCategory.DECORATION: ['decoration', 'decor', 'furniture'],
+        LoadOrderCategory.ADMIN: ['pippi', 'mcp', 'mod control panel', 'manager', 'admin'],
+        LoadOrderCategory.MAPS: ['savage wilds', 'map', 'world', 'island', 'land'],
+        LoadOrderCategory.COSMETIC: ['skin', 'hair', 'face', 'tattoo', 'body', 'appearance', 'cosmetic', 'warpaint'],
+        LoadOrderCategory.ITEMS: ['weapon', 'armor', 'tool', 'equipment', 'shield', 'gear'],
+        LoadOrderCategory.THRALLS: ['better thralls', 'follower', 'thrall', 'pet', 'mount'],
+        LoadOrderCategory.BUILDING: ['building', 'construction', 'architect', 'decoration', 'decor', 'furniture', 'placeable'],
+        LoadOrderCategory.OVERHAUL: ['overhaul', 'combat', 'sorcery', 'magic', 'rpg', 'system'],
+        LoadOrderCategory.UTILITY: ['utility', 'qol', 'tweak', 'fix', 'inventory', 'stack'],
     }
    
     def __init__(self, database):
@@ -511,15 +534,18 @@ class LoadOrderEngine:
     def categorize_mod(self, mod_data):
         """Determine the category of a mod based on its title, tags, and description"""
         title = mod_data.get('title', '').lower()
+        mod_id = str(mod_data.get('id', ''))
         tags = [tag.lower() for tag in mod_data.get('tags', [])]
         description = mod_data.get('description', '').lower()
-       
-        # Check for known mods first
-        mod_id = mod_data.get('id', '')
-        if mod_id in self.FRAMEWORK_MODS:
-            return LoadOrderCategory.FRAMEWORK
-        if mod_id in self.LIBRARY_MODS:
-            return LoadOrderCategory.LIBRARY
+        
+        # Check specific mods by ID first
+        if mod_id in self.SPECIFIC_MOD_RULES:
+            return self.SPECIFIC_MOD_RULES[mod_id]['category']
+            
+        # Check specific mods by Title keyword
+        for key, info in self.SPECIFIC_MOD_RULES.items():
+            if not key.isdigit() and key in title:
+                return info['category']
        
         # Check keywords in title and tags
         text_to_check = f"{title} {' '.join(tags)} {description}"
@@ -530,183 +556,30 @@ class LoadOrderEngine:
                     return category
        
         # Default category
-        return LoadOrderCategory.GAMEPLAY
+        return LoadOrderCategory.OVERHAUL if any(k in text_to_check for k in ['overhaul', 'system', 'mechanic']) else LoadOrderCategory.ITEMS
    
     def get_mod_priority(self, mod_data):
         """Calculate priority score for a mod"""
-        category = self.categorize_mod(mod_data)
-        base_priority = category.value
-       
-        # Adjust based on rules
-        mod_id = mod_data.get('id', '')
-        for rule in self.rules:
-            if rule.mod_id == mod_id and rule.rule_type == 'priority':
-                if rule.priority is not None:
-                    return rule.priority
-       
-        # Adjust based on subscriptions (popular mods get slight priority boost)
-        subscriptions = mod_data.get('subscriptions', 0)
-        if subscriptions > 10000:
-            base_priority += 5
-        elif subscriptions > 5000:
-            base_priority += 3
-       
-        return base_priority
-   
-    def check_conflicts(self, mod_ids):
-        """Check for conflicts between selected mods"""
-        conflicts = []
-       
-        for rule in self.rules:
-            if rule.rule_type == 'conflicts_with' and rule.mod_id in mod_ids and rule.target_mod_id in mod_ids:
-                conflicts.append((rule.mod_id, rule.target_mod_id, rule.notes))
-       
-        return conflicts
-   
-    def check_dependencies(self, mod_ids):
-        """Check for missing dependencies"""
-        missing_deps = []
-       
-        for rule in self.rules:
-            if rule.rule_type == 'requires' and rule.mod_id in mod_ids and rule.target_mod_id not in mod_ids:
-                missing_deps.append((rule.mod_id, rule.target_mod_id, rule.notes))
-       
-        return missing_deps
-   
-    def generate_load_order(self, mod_ids, mod_data_map):
-        """
-        Generate an optimized load order for the given mods
-       
-        Algorithm:
-        1. Apply absolute priority rules
-        2. Apply dependency ordering (requires/place_before/place_after)
-        3. Sort by category priority
-        4. Apply topological sort for dependencies
-        """
-        if not mod_ids:
-            return []
-       
-        # Create a map of mod data
-        mods = [mod_data_map[mod_id] for mod_id in mod_ids if mod_id in mod_data_map]
-       
-        # Step 1: Sort by priority (highest first) 
-# ==================== LOAD ORDER ENGINE ====================
-
-class LoadOrderCategory(Enum):
-    FRAMEWORK = 100
-    ADMIN_TOOLS = 90
-    CORE_OVERRIDES = 80
-    GAMEPLAY = 70
-    BUILDING = 60
-    ITEMS = 50
-    CHARACTERS = 40
-    UI = 30
-    LIBRARY = 20
-    DECORATION = 10
-
-class ModRule:
-    def __init__(self, mod_id, rule_type, target_mod_id=None, priority=None, notes=""):
-        self.mod_id = mod_id
-        self.rule_type = rule_type  # requires, conflicts_with, place_before, place_after
-        self.target_mod_id = target_mod_id
-        self.priority = priority
-        self.notes = notes
-
-class LoadOrderEngine:
-    """Engine for creating optimized load orders based on mod rules and categories"""
-   
-    # Known framework and library mods (partial list)
-    FRAMEWORK_MODS = {
-        '880454836': 'Pippi',  # Pippi - User & Server Management
-        '1625650704': 'ModControlPanel',
-    }
-   
-    LIBRARY_MODS = {
-        '2679653448': 'LBPR - Additional Features',
-        '2291760550': 'Kerozards Paragon Leveling',
-    }
-   
-    # Known mod categories based on common tags
-    CATEGORY_KEYWORDS = {
-        LoadOrderCategory.FRAMEWORK: ['pippi', 'framework', 'admin'],
-        LoadOrderCategory.ADMIN_TOOLS: ['admin', 'manager', 'control'],
-        LoadOrderCategory.CORE_OVERRIDES: ['overhaul', 'core', 'savage', 'age'],
-        LoadOrderCategory.GAMEPLAY: ['gameplay', 'survival', 'combat', 'thrall'],
-        LoadOrderCategory.BUILDING: ['building', 'construction', 'architect'],
-        LoadOrderCategory.ITEMS: ['weapon', 'armor', 'item', 'equipment'],
-        LoadOrderCategory.CHARACTERS: ['character', 'race', 'appearance'],
-        LoadOrderCategory.UI: ['ui', 'interface', 'hud', 'inventory'],
-        LoadOrderCategory.LIBRARY: ['library', 'prerequisite', 'dependency'],
-        LoadOrderCategory.DECORATION: ['decoration', 'decor', 'furniture'],
-    }
-   
-    def __init__(self, database):
-        self.db = database
-        self.rules = []
-        self.load_rules()
-   
-    def load_rules(self):
-        """Load rules from database"""
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM load_order_rules')
-       
-        for row in cursor.fetchall():
-            rule = ModRule(
-                mod_id=row['mod_id'],
-                rule_type=row['rule_type'],
-                target_mod_id=row['target_mod_id'],
-                priority=row['priority'],
-                notes=row['notes']
-            )
-            self.rules.append(rule)
-       
-        conn.close()
-   
-    def categorize_mod(self, mod_data):
-        """Determine the category of a mod based on its title, tags, and description"""
+        mod_id = str(mod_data.get('id', ''))
         title = mod_data.get('title', '').lower()
-        tags = [tag.lower() for tag in mod_data.get('tags', [])]
-        description = mod_data.get('description', '').lower()
-       
-        # Check for known mods first
-        mod_id = mod_data.get('id', '')
-        if mod_id in self.FRAMEWORK_MODS:
-            return LoadOrderCategory.FRAMEWORK
-        if mod_id in self.LIBRARY_MODS:
-            return LoadOrderCategory.LIBRARY
-       
-        # Check keywords in title and tags
-        text_to_check = f"{title} {' '.join(tags)} {description}"
-       
-        for category, keywords in self.CATEGORY_KEYWORDS.items():
-            for keyword in keywords:
-                if keyword in text_to_check:
-                    return category
-       
-        # Default category
-        return LoadOrderCategory.GAMEPLAY
-   
-    def get_mod_priority(self, mod_data):
-        """Calculate priority score for a mod"""
-        category = self.categorize_mod(mod_data)
-        base_priority = category.value
-       
-        # Adjust based on rules
-        mod_id = mod_data.get('id', '')
+        
+        # 1. Check if there's a specific hardcoded priority for this mod
+        if mod_id in self.SPECIFIC_MOD_RULES:
+            return self.SPECIFIC_MOD_RULES[mod_id]['priority']
+            
+        for key, info in self.SPECIFIC_MOD_RULES.items():
+            if not key.isdigit() and key in title:
+                return info['priority']
+                
+        # 2. Check for user-defined rules in database
         for rule in self.rules:
             if rule.mod_id == mod_id and rule.rule_type == 'priority':
                 if rule.priority is not None:
                     return rule.priority
-       
-        # Adjust based on subscriptions (popular mods get slight priority boost)
-        subscriptions = mod_data.get('subscriptions', 0)
-        if subscriptions > 10000:
-            base_priority += 5
-        elif subscriptions > 5000:
-            base_priority += 3
-       
-        return base_priority
+        
+        # 3. Fallback to category base priority
+        category = self.categorize_mod(mod_data)
+        return category.value
    
     def check_conflicts(self, mod_ids):
         """Check for conflicts between selected mods"""
@@ -729,25 +602,17 @@ class LoadOrderEngine:
         return missing_deps
    
     def generate_load_order(self, mod_ids, mod_data_map):
-        """
-        Generate an optimized load order for the given mods
-       
-        Algorithm:
-        1. Apply absolute priority rules
-        2. Apply dependency ordering (requires/place_before/place_after)
-        3. Sort by category priority
-        4. Apply topological sort for dependencies
-        """
+        """Generate an optimized load order for the given mods"""
         if not mod_ids:
             return []
        
-        # Create a map of mod data
+        # Create a list of mod data
         mods = [mod_data_map[mod_id] for mod_id in mod_ids if mod_id in mod_data_map]
        
         # Step 1: Sort by priority (highest first)
         mods.sort(key=lambda x: self.get_mod_priority(x), reverse=True)
        
-        # Step 2: Apply explicit ordering rules
+        # Step 2: Apply explicit ordering rules from database
         ordered_mods = self.apply_ordering_rules(mods)
        
         # Step 3: Extract IDs in final order
@@ -757,10 +622,9 @@ class LoadOrderEngine:
    
     def apply_ordering_rules(self, mods):
         """Apply ordering rules to the mod list"""
-        # Start with the priority-sorted list
         ordered = mods.copy()
        
-        # Apply place_before and place_after rules
+        # Apply place_before and place_after rules from database
         for rule in self.rules:
             if rule.rule_type in ['place_before', 'place_after']:
                 self.apply_single_rule(ordered, rule)
@@ -778,19 +642,15 @@ class LoadOrderEngine:
         target_idx = mod_ids.index(rule.target_mod_id)
        
         if rule.rule_type == 'place_before':
-            # Move mod before target
             if mod_idx > target_idx:
                 mod = mods.pop(mod_idx)
-                # Insert before target (which may have moved after pop)
-                new_target_idx = mod_ids.index(rule.target_mod_id)
+                new_target_idx = [m['id'] for m in mods].index(rule.target_mod_id)
                 mods.insert(new_target_idx, mod)
        
         elif rule.rule_type == 'place_after':
-            # Move mod after target
             if mod_idx < target_idx:
                 mod = mods.pop(mod_idx)
-                # Insert after target
-                new_target_idx = mod_ids.index(rule.target_mod_id)
+                new_target_idx = [m['id'] for m in mods].index(rule.target_mod_id)
                 mods.insert(new_target_idx + 1, mod)
 
  # ==================== GUI COMPONENTS ====================
